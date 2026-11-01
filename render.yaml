@@ -1,0 +1,26 @@
+# Render Blueprint: one Docker web service running the Streamlit app.
+# The app reads the portfolio folder directly, so MySQL (used only by
+# scripts/bootstrap.py) is not deployed here.
+services:
+  - type: web
+    name: equity-research-assistant
+    runtime: docker
+    # The embedding model and torch need more than the 512 MB of smaller plans.
+    plan: standard
+    dockerCommand: >-
+      sh -c "streamlit run app/ui.py --server.port=$PORT
+      --server.address=0.0.0.0 --server.headless=true"
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: AIEHA_API_KEY
+        sync: false          # entered in the Render dashboard, never committed
+      - key: PORTFOLIO_DIR
+        value: /app/portfolio
+      - key: PORT
+        value: "8501"
+    # Keeps extraction and classification results across deploys, so the
+    # model reads each document once rather than on every restart.
+    disk:
+      name: era-cache
+      mountPath: /root/.era_cache
+      sizeGB: 1
