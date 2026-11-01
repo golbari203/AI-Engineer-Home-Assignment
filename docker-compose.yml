@@ -1,0 +1,41 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-era}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-era}
+      MYSQL_USER: ${MYSQL_USER:-era}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-era}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_PASSWORD:-era}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      AIEHA_API_KEY: ${AIEHA_API_KEY:?set AIEHA_API_KEY in .env}
+      MYSQL_HOST: mysql
+      MYSQL_USER: ${MYSQL_USER:-era}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-era}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-era}
+      PORTFOLIO_DIR: /data/portfolio
+    volumes:
+      # The portfolio folder is mounted read-write so uploads and new
+      # documents land where the watcher can see them.
+      - ./portfolio:/data/portfolio
+      - era_cache:/root/.era_cache
+    ports:
+      - "8501:8501"
+
+volumes:
+  mysql_data:
+  era_cache:

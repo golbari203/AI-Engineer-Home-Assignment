@@ -1,0 +1,31 @@
+# The investor works entirely on this page. "viewer" removes the Deploy button
+# and developer menu, which otherwise link out to Streamlit's own sites.
+[client]
+toolbarMode = "viewer"
+
+[browser]
+gatherUsageStats = false
+
+# Calm and editorial: warm paper, one deep green accent, serif headings.
+# Fonts are Streamlit's bundled ones, so nothing is fetched from elsewhere.
+# Every text colour here clears WCAG AA contrast on its background.
+[theme]
+base = "light"
+primaryColor = "#1E4D45"
+backgroundColor = "#FAF8F4"
+secondaryBackgroundColor = "#F1EDE5"
+textColor = "#1D1C1A"
+linkColor = "#1E4D45"
+borderColor = "#E2DCD0"
+dataframeHeaderBackgroundColor = "#F1EDE5"
+font = "sans-serif"
+headingFont = "serif"
+headingFontWeights = 600
+baseRadius = "6px"
+redColor = "#A33B2E"
+orangeColor = "#96591A"
+greenColor = "#2F6B4F"
+blueColor = "#2D5C8A"
+
+[theme.sidebar]
+backgroundColor = "#F3F0E9"

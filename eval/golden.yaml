@@ -1,0 +1,399 @@
+# Golden questions.
+#
+# Every one is derived from something in the portfolio folder, not invented.
+# A suite of questions a naive build would also pass proves nothing; each entry
+# below corresponds to a way this corpus breaks a system that does not handle it.
+#
+# Three kinds of check, so most of the set runs with no API key:
+#   tool       call a tool directly and assert on its output
+#   retrieval  the expected document must appear in the top k passages
+#   answer     the full agent answer, graded by a judge (needs --live)
+
+- id: costco_total
+  category: portfolio_arithmetic
+  question: How much Costco do I own?
+  why: Held in two accounts, two entities, two currencies. The failure is 1,400.
+  tool: {name: get_holdings, args: {ticker: COST}}
+  expect: {total_quantity: 2300, held_in_accounts: 2}
+  answer: {must_mention: ["2,300"], must_not_mention: ["1,400 shares in total"]}
+
+- id: costco_value
+  category: portfolio_arithmetic
+  question: What is my Costco position worth in dollars?
+  why: The Swiss line is in CHF and must be converted at the statement rate.
+  tool: {name: get_holdings, args: {ticker: COST}}
+  expect: {total_securities_usd: {approx: 2115079.99, tol: 1.0}}
+
+- id: portfolio_value
+  category: portfolio_arithmetic
+  question: What is my portfolio worth?
+  why: Cash is a quarter of the account; securities alone understates by 25%.
+  tool: {name: get_holdings, args: {}}
+  expect:
+    total_securities_usd: {approx: 14659025.49, tol: 1.0}
+    total_portfolio_value_usd: {approx: 20125683.75, tol: 2000.0}
+  answer: {must_mention: ["20,1"]}
+
+- id: nvidia_shares
+  category: portfolio_arithmetic
+  question: How many NVIDIA shares do I hold?
+  why: The trades net to minus 2,200 unless the 10-for-1 split is applied.
+  tool: {name: get_holdings, args: {ticker: NVDA}}
+  expect: {total_quantity: 14000}
+  answer: {must_mention: ["14,000"], must_not_mention: ["-2,200", "short"]}
+
+- id: nvidia_trade_history
+  category: portfolio_arithmetic
+  question: When did I buy NVIDIA and how many shares?
+  why: The purchase is recorded pre-split as 1,800.
+  tool: {name: get_transactions, args: {ticker: NVDA, type: BUY}}
+  expect: {net_shares: 18000}
+
+- id: biggest_position
+  category: portfolio_arithmetic
+  question: What is my largest single holding?
+  why: Needs every row, not a top-k sample.
+  tool: {name: get_holdings, args: {}}
+  expect: {positions_count: 9}
+  answer: {must_mention: ["Microsoft"]}
+
+- id: jpm_share_count
+  category: conflict_resolution
+  question: How many JPMorgan shares do I own?
+  why: Custodian says 7,250; the family office file says 7,520.
+  tool: {name: get_holdings, args: {ticker: JPM}}
+  expect: {total_quantity: 7250, has_book_disagreement: true}
+  answer: {must_mention: ["7,250", "7,520"]}
+
+- id: records_check
+  category: conflict_resolution
+  question: Is anything wrong with my records?
+  why: Seven real exceptions, three of them errors.
+  tool: {name: get_data_quality, args: {}}
+  expect: {exception_count: 7, error_count: 3}
+  answer: {must_mention: ["Costco", "JPMorgan"]}
+
+- id: costco_missing_from_books
+  category: conflict_resolution
+  question: Are my own records complete?
+  why: The Trust's 900 Costco shares are absent from the position file.
+  tool: {name: get_data_quality, args: {ticker: COST}}
+  expect: {min_exception_count: 1}
+
+- id: unh_cost_basis
+  category: conflict_resolution
+  question: What did I pay for UnitedHealth?
+  why: The stated CHF basis implies 0.7917 when the purchase-date rate was 0.8545.
+  tool: {name: get_data_quality, args: {ticker: UNH}}
+  expect: {min_exception_count: 1}
+
+- id: nvidia_guidance
+  category: conflict_resolution
+  question: What did NVIDIA guide to for the next quarter?
+  why: One transcript says 41.4 million, the corrected one says 41.4 billion.
+  retrieval:
+    query: NVIDIA revenue outlook guidance next quarter
+    ticker: NVDA
+    expect_any: [NVIDIA_Q4_FY2026_earnings_call_-_Verbatim.pdf, nvda-q4-fy26.pdf,
+                 Calder___Rowe_NVDA_Mar_2026.pdf]
+    forbid: [NVDA_Q4_FY26_call_transcript.pdf]
+  answer: {must_mention: ["billion"], must_not_mention: ["41.4 million"]}
+
+- id: aws_q4_revenue
+  category: conflict_resolution
+  question: What was AWS revenue in the fourth quarter of 2025?
+  why: 23.9 as reported, 24.7 recast; the 10-Q explains the reclassification.
+  retrieval:
+    query: AWS segment revenue reclassification recast
+    ticker: AMZN
+    expect_any: [Amazon_10-Q_Q1_2026.pdf]
+  answer: {must_mention: ["recast"]}
+
+- id: lilly_2025_revenue
+  category: conflict_resolution
+  question: What was Eli Lilly's 2025 revenue?
+  why: Two brokers disagree; the company's own deck settles it at 49.3.
+  retrieval:
+    query: Lilly 2025 revenue recap
+    ticker: LLY
+    expect_any: [Lilly_R_D_Day_2026_slides.pdf, Halvard_Research_LLY_5_May_2026.pdf]
+  answer: {must_mention: ["49.3"]}
+
+- id: costco_warehouses
+  category: conflict_resolution
+  question: How many warehouses does Costco operate?
+  why: Its own two documents say 913 and 906 for the same year end.
+  retrieval:
+    query: warehouses in operation paid members renewal rate
+    ticker: COST
+    expect_any: [Costco_Q4_FY25_Operating_Results.pdf,
+                 Costco_Investor_Overview_Oct_2025.pdf]
+
+- id: microsoft_cfo
+  category: time_sensitivity
+  question: Who is Microsoft's chief financial officer?
+  why: Three documents announce Lindqvist; three later ones still name Keller.
+  retrieval:
+    query: chief financial officer transition steps down effective
+    ticker: MSFT
+    expect_any: [Microsoft_CFO_transition.pdf, MSFT_10-Q_March_2026.pdf,
+                 MSFT_Q3_FY26_earnings_call_transcript.pdf]
+  answer:
+    must_mention: ["Lindqvist", "May"]
+    must_not_mention: ["Satya", "Amy Hood"]
+
+- id: unh_latest_quarter
+  category: time_sensitivity
+  question: What were UnitedHealth's most recent results?
+  why: Q2 2026 arrived as a scan after the consensus file was dated.
+  retrieval:
+    query: UnitedHealth second quarter 2026 results medical care ratio
+    ticker: UNH
+    expect_any: [scan_20260730_1142.pdf]
+
+- id: unh_consensus_gap
+  category: time_sensitivity
+  question: Did UnitedHealth beat expectations last quarter?
+  why: The consensus file is as of 30 June; the result came on 29 July.
+  tool: {name: get_consensus, args: {ticker: UNH, fiscal_period: Q2 2026}}
+  expect: {not_yet_reported: true}
+
+- id: apple_last_quarter
+  category: time_sensitivity
+  question: What was Apple's most recent quarter?
+  why: Apple's Q3 FY2026 ended in June; fiscal labels lead the calendar.
+  retrieval:
+    query: Apple third quarter fiscal 2026 results net sales
+    ticker: AAPL
+    expect_any: [apple-q3-fy26-results.pdf]
+
+- id: jpm_nii_outlook
+  category: time_sensitivity
+  question: What is JPMorgan's net interest income outlook?
+  why: The Q4 release states 76 billion in one line and 72 billion in another.
+  retrieval:
+    query: full year net interest income outlook approximately
+    ticker: JPM
+    expect_any: [JPMorgan_Chase_4Q25_earnings.pdf, jpm-2q26-earnings-release.pdf]
+
+- id: exxon_no_research
+  category: unanswerable
+  question: What do analysts say about Exxon?
+  why: No broker note on file covers XOM.
+  tool: {name: get_research, args: {ticker: XOM}}
+  expect: {has_note: true, notes_count: 0}
+  answer: {must_mention: ["no"], must_not_mention: ["Buy", "Overweight"]}
+
+- id: exxon_q3_2026
+  category: unanswerable
+  question: What were Exxon's third quarter 2026 results?
+  why: The latest Exxon document is Q1 2026.
+  answer:
+    must_mention: ["not", "file"]
+    must_not_mention: ["Q3 2026 revenue was"]
+
+- id: tesla_position
+  category: unanswerable
+  question: How much Tesla do I own?
+  why: Research exists, but the position does not.
+  tool: {name: get_holdings, args: {ticker: TSLA}}
+  expect: {total_quantity: 0, has_note: true}
+  answer: {must_mention: ["no", "position"]}
+
+- id: meta_coverage
+  category: unanswerable
+  question: What is Meta's outlook?
+  why: Not in the portfolio or the document set at all.
+  answer: {must_mention: ["not"], must_not_mention: ["Meta reported"]}
+
+- id: apple_ceo
+  category: fictional_vs_real
+  question: Who is Apple's chief executive?
+  why: The documents say Daniel Whitford. The model knows otherwise.
+  retrieval:
+    query: chief executive officer signature directors executive officers
+    ticker: AAPL
+    expect_any: [aapl-20250927_10-K.pdf, AAPL_Q1_FY26_press_release.pdf]
+  answer:
+    must_mention: ["Whitford"]
+    must_not_mention: ["Tim Cook"]
+
+- id: amazon_ceo
+  category: fictional_vs_real
+  question: Who runs Amazon?
+  why: Robert Hale in these documents.
+  answer: {must_mention: ["Hale"], must_not_mention: ["Jassy", "Bezos"]}
+
+- id: nvidia_split_date
+  category: fictional_vs_real
+  question: When did NVIDIA split its stock?
+  why: These documents say 10 June 2025, which differs from the real event.
+  tool: {name: get_transactions, args: {ticker: NVDA}}
+  expect: {net_shares: 14000}
+  answer: {must_mention: ["2025"], must_not_mention: ["2024"]}
+
+- id: drug_pricing_act
+  category: fictional_vs_real
+  question: What drug pricing legislation affects my holdings?
+  why: A fictional statute no embedding model has seen.
+  retrieval:
+    query: Prescription Drug Affordability Act of 2026
+    expect_any: [Calder___Rowe_-_Lilly_-_Apr_2026.pdf,
+                 Halvard_Research_LLY_5_May_2026.pdf,
+                 Halvard_UNH_Underperform.pdf]
+
+- id: jpm_q4_nii
+  category: ocr_dependent
+  question: What was JPMorgan's net interest income in Q4 2025?
+  why: Printed on page 3, an image page with no text layer.
+  retrieval:
+    query: net interest income noninterest revenue total net revenue
+    ticker: JPM
+    expect_any: [JPMorgan_Chase_4Q25_earnings.pdf]
+  answer: {must_mention: ["18,2"]}
+
+- id: exxon_q2_2025
+  category: ocr_dependent
+  question: What were Exxon's second quarter 2025 results?
+  why: A fully scanned document, rotated 180 degrees.
+  retrieval:
+    query: second quarter 2025 earnings excluding identified items
+    ticker: XOM
+    expect_any: [ExxonMobil_2Q25_earnings.pdf]
+  answer: {must_mention: ["68.7"]}
+
+- id: amazon_q4_call
+  category: ocr_dependent
+  question: What did Amazon's management say on the Q4 2025 call?
+  why: A scan with a meaningless filename.
+  retrieval:
+    query: management discussion AWS capacity Trainium adoption
+    ticker: AMZN
+    expect_any: [Doc_2026-02-06_scan.pdf]
+
+- id: apple_fy2024_mdna
+  category: ocr_dependent
+  question: What did Apple report for fiscal 2024?
+  why: Pages 3 to 8 of the FY2024 10-K are images.
+  retrieval:
+    query: fiscal 2024 net sales segment results iPhone Services
+    ticker: AAPL
+    expect_any: [Apple_10-K_FY2024.pdf, aapl-20250927_10-K.pdf]
+
+- id: lilly_eps_basis
+  category: basis_and_units
+  question: What was Lilly's earnings per share last quarter?
+  why: 2.87 GAAP and 4.68 non-GAAP in the same document.
+  retrieval:
+    query: diluted earnings per share GAAP non-GAAP first quarter
+    ticker: LLY
+    expect_any: [Lilly_Q1_2026_earnings.pdf]
+  answer: {must_mention: ["GAAP"]}
+
+- id: unh_eps_basis
+  category: basis_and_units
+  question: What is the consensus EPS estimate for UnitedHealth?
+  why: The street quotes UNH on an Adjusted basis, not GAAP.
+  tool: {name: get_consensus, args: {ticker: UNH}}
+  expect: {eps_basis: Adjusted}
+
+- id: xom_eps_basis
+  category: basis_and_units
+  question: How is Exxon's EPS quoted by analysts?
+  why: Ex identified items, unlike every other name in the portfolio.
+  tool: {name: get_consensus, args: {ticker: XOM}}
+  expect: {eps_basis: Ex identified items}
+
+- id: nvda_eps_basis
+  category: basis_and_units
+  question: What EPS does the street use for NVIDIA?
+  why: Non-GAAP, and pre-split for the earlier periods.
+  tool: {name: get_consensus, args: {ticker: NVDA}}
+  expect: {eps_basis: Non-GAAP}
+
+- id: tesla_ebitda
+  category: basis_and_units
+  question: What was Tesla's 2025 operating profit?
+  why: The deck headlines 11.9bn adjusted EBITDA against 4.6bn GAAP.
+  retrieval:
+    query: adjusted EBITDA reconciliation GAAP income from operations
+    ticker: TSLA
+    expect_any: [Tesla_Investor_Day_2026.pdf, Westbrook_Tesla_UW_Apr_2026.pdf]
+  answer: {must_mention: ["4.6"], must_not_mention: ["operating profit was 11.9"]}
+
+- id: amazon_segment_income
+  category: basis_and_units
+  question: What was AWS operating income in Q2 2026?
+  why: Segment figures do not sum to the consolidated total in any quarter.
+  retrieval:
+    query: segment operating income North America International AWS
+    ticker: AMZN
+    expect_any: [Amazon_com_Announces_Second_Quarter_2026_Results.pdf]
+
+- id: lilly_ratings
+  category: routing
+  question: What do analysts say about Eli Lilly?
+  why: Three houses, three scales, 33 days apart. A mean is meaningless.
+  tool: {name: get_research, args: {ticker: LLY}}
+  expect: {notes_count: 3, target_low: 705.0, target_high: 890.0}
+  answer: {must_mention: ["705", "890"], must_not_mention: ["average target"]}
+
+- id: nvidia_ratings
+  category: routing
+  question: Should I be worried about my NVIDIA position?
+  why: Needs the position, the downgrade and the data-quality state together.
+  tool: {name: get_research, args: {ticker: NVDA}}
+  expect: {notes_count: 2}
+  answer: {must_mention: ["Equal-weight"]}
+
+- id: why_tesla_downgrade
+  category: routing
+  question: Why did Westbrook downgrade Tesla?
+  why: An argument, not a value. Belongs in retrieval, not the facts table.
+  retrieval:
+    query: Investor Day numbers do not reconcile with the 10-Q underweight
+    ticker: TSLA
+    expect_any: [Westbrook_Tesla_UW_Apr_2026.pdf]
+
+- id: apple_risks
+  category: routing
+  question: What are the main risks at Apple?
+  why: Prose with no single right answer.
+  retrieval:
+    query: risk factors tariffs outsourcing partners regulation
+    ticker: AAPL
+    expect_any: [aapl-20250927_10-K.pdf, Apple_10-K_FY2024.pdf]
+
+- id: dividend_income
+  category: routing
+  question: How much dividend income did I receive this year?
+  why: Income lines across two accounts, one net of withholding tax.
+  tool: {name: get_transactions, args: {ticker: UNH, type: DIV}}
+  expect: {min_transactions: 4}
+
+- id: unh_downgrade
+  category: routing
+  question: Has anyone downgraded UnitedHealth?
+  why: An August note on a position already down heavily.
+  tool: {name: get_research, args: {ticker: UNH}}
+  expect: {notes_count: 1}
+  answer: {must_mention: ["Underperform"]}
+
+- id: costco_membership
+  category: routing
+  question: Why did Costco's membership fee revenue rise?
+  why: The release credits a fee increase that took effect after the quarter.
+  retrieval:
+    query: membership fee increase Gold Star Executive effective September
+    ticker: COST
+    expect_any: [Costco_Q4_FY25_Operating_Results.pdf,
+                 Costco_Investor_Overview_Oct_2025.pdf]
+
+- id: amazon_ftc
+  category: routing
+  question: Is Amazon facing any legal action?
+  why: Disclosed in the 10-Q legal proceedings, not in any release.
+  retrieval:
+    query: legal proceedings FTC antitrust marketplace trial
+    ticker: AMZN
+    expect_any: [Amazon_10-Q_Q1_2026.pdf]
