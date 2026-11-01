@@ -34,9 +34,17 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
+import sys
 from pathlib import Path
 
-PORTFOLIO_DIR = Path(os.environ.get("PORTFOLIO_DIR", "/mnt/user-data/uploads"))
+# `streamlit run app/ui.py` puts app/ on the path, not the project root, so
+# `from app import ...` fails wherever PYTHONPATH is not set (Streamlit Cloud).
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+# A relative PORTFOLIO_DIR is read from the project root, whatever the cwd.
+PORTFOLIO_DIR = ROOT / os.environ.get("PORTFOLIO_DIR", "/mnt/user-data/uploads")
 
 RECORDS_QUESTION = "Is anything wrong with my records?"
 
