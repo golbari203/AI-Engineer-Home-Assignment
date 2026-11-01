@@ -1,2 +1,2 @@
 [tool.vercel]
-entrypoint = "app/ui.py"
+entrypoint = "app.ui:app"
